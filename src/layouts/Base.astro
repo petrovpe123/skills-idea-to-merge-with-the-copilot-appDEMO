@@ -49,7 +49,7 @@ const { title = "Mona's Bookmark Manager App" } = Astro.props;
       }
       :root {
         color-scheme: light dark;
-        --accent: #3b82f6;
+        --accent: #7c3aed;
         --border: #8883;
         --muted: color-mix(in srgb, currentColor 60%, transparent);
         --radius: 0.6rem;
@@ -60,12 +60,12 @@ const { title = "Mona's Bookmark Manager App" } = Astro.props;
       body {
         font-family: var(--font-body);
         line-height: 1.5;
-        max-width: 40rem;
+        max-width: 46rem;
         margin: 0 auto;
         padding: 2.5rem 1.25rem 4rem;
       }
-      header { margin-bottom: 1.5rem; }
-      h1 { margin: 0 0 0.25rem; font-size: 1.75rem; font-family: var(--font-head); letter-spacing: -0.01em; }
+      header { margin-bottom: 2rem; }
+      h1 { margin: 0 0 0.4rem; font-size: clamp(1.75rem, 6vw, 2.4rem); font-family: var(--font-head); letter-spacing: -0.035em; line-height: 1.1; }
       .tagline { margin: 0; color: var(--muted); }
 
       form {
@@ -91,13 +91,14 @@ const { title = "Mona's Bookmark Manager App" } = Astro.props;
         padding: 0.6rem 1rem;
         border: 1px solid transparent;
         border-radius: var(--radius);
-        background: var(--accent);
+        background: linear-gradient(135deg, var(--accent), #a855f7);
         color: #fff;
         font: inherit;
         font-weight: 600;
         cursor: pointer;
       }
-      button:hover { filter: brightness(1.05); }
+      button:hover { filter: brightness(1.08); transform: translateY(-1px); }
+      button { transition: filter 150ms ease, transform 150ms ease, border-color 150ms ease; }
       .hint { margin: 0 0 1.5rem; font-size: 0.8rem; color: var(--muted); }
 
       #list-header {
@@ -130,7 +131,7 @@ const { title = "Mona's Bookmark Manager App" } = Astro.props;
       }
       .bookmark .url { flex: 1 1 12rem; overflow-wrap: anywhere; }
       .bookmark .slug {
-        font-family: ui-monospace, "SF Mono", monospace;
+        font-family: var(--font-body);
         font-size: 0.85rem;
         padding: 0.15rem 0.5rem;
         border-radius: 999px;

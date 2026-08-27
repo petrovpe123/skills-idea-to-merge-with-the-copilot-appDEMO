@@ -1,15 +1,10 @@
----
-// Bookmarks component (scaffold).
-//
-// The markup below renders during the static build. The dynamic behavior —
-// adding a bookmark, generating a short slug, and persisting to the browser —
-// must run ONLY in the client-side <script> boundary at the bottom of this
-// file. Astro runs that script in the browser, never during the build, so
-// browser-only APIs are safe there.
-//
-// You will implement the behavior in Step 3.
----
-<form id="add-bookmark">
+<section class="bookmark-card" aria-labelledby="form-title">
+  <div class="intro">
+    <p class="eyebrow">Your private link shelf</p>
+    <h2 id="form-title">Save something worth returning to</h2>
+  </div>
+
+  <form id="add-bookmark">
   <div class="field">
     <label for="url">Link to save</label>
     <input
@@ -19,52 +14,237 @@
       inputmode="url"
       autocomplete="off"
       spellcheck="false"
-      placeholder="https://example.com"
+      placeholder="example.com or https://example.com"
       required
     />
   </div>
-  <button type="submit">Add bookmark</button>
-</form>
+    <button type="submit">Add bookmark</button>
+  </form>
 
-<p class="hint">Paste a URL and select <strong>Add bookmark</strong> to generate its short <code>mona-</code> slug.</p>
+  <p class="hint">No protocol needed. Mona normalises your link and creates a compact <code>mona-</code> slug.</p>
+  <p id="form-status" class="status" role="status" aria-live="polite"></p>
 
-<p id="empty-state" class="empty">No bookmarks yet — add your first link above.</p>
+  <p id="empty-state" class="empty">No bookmarks yet — your saved links will appear here.</p>
 
-<div id="list-header" hidden>
-  <h2 class="list-title">Saved bookmarks</h2>
-  <button id="clear-all" type="button" class="clear">Clear all</button>
-</div>
+  <div id="list-header" hidden>
+    <h2 class="list-title">Saved bookmarks</h2>
+    <button id="clear-all" type="button" class="clear">Clear all</button>
+  </div>
 
-<ul id="bookmark-list" aria-label="Saved bookmarks" aria-live="polite">
-  <!-- Bookmarks render here in the browser. -->
-</ul>
+  <ul id="bookmark-list" aria-label="Saved bookmarks" aria-live="polite"></ul>
+</section>
 
 <script>
-  // CLIENT-SIDE BOUNDARY — runs in the browser only.
-  //
-  // TODO (Step 3): implement the bookmarks feature here.
-  //   1. On form submit, call event.preventDefault() FIRST so the page
-  //      never reloads, then read and validate the original URL.
-  //   2. Generate a short slug with a "mona-" prefix (for example, base62
-  //      of a counter or hash → "mona-7fk2").
-  //   3. Save the original URL and its slug, then persist them in the browser.
-  //   4. Render each saved bookmark into #bookmark-list as a row (li.bookmark) with:
-  //        - the original URL as a link (.url) that opens in a new tab,
-  //        - its short slug shown as a badge (.slug), and
-  //        - a "Copy" button (.copy) that copies the slug.
-  //   5. Toggle empty vs. saved state: hide #empty-state and show #list-header
-  //      (the "Saved bookmarks" heading + "Clear all" button) once at least one
-  //      bookmark exists; reverse it when the list is empty.
-  //   6. Wire the #clear-all button to remove every saved bookmark (clear the
-  //      list, clear browser storage) after a quick confirm.
-  //   7. On page load, read the saved bookmarks from storage and render
-  //      them so the list persists across reloads.
-  //
-  // Because this code lives in a client <script>, browser storage APIs are
-  // safe to use here without breaking the static build.
-  const form = document.getElementById('add-bookmark');
+  import {
+    createSlug,
+    formatBookmark,
+    normalizeUrl,
+    parseBookmarks,
+    type Bookmark,
+  } from '../lib/bookmarks';
+
+  const STORAGE_KEY = 'mona-bookmarks';
+  const form = document.querySelector<HTMLFormElement>('#add-bookmark');
+  const input = document.querySelector<HTMLInputElement>('#url');
+  const list = document.querySelector<HTMLUListElement>('#bookmark-list');
+  const emptyState = document.querySelector<HTMLElement>('#empty-state');
+  const listHeader = document.querySelector<HTMLElement>('#list-header');
+  const clearButton = document.querySelector<HTMLButtonElement>('#clear-all');
+  const status = document.querySelector<HTMLElement>('#form-status');
+  let bookmarks = loadBookmarks();
+
+  render();
+
   form?.addEventListener('submit', (event) => {
-    event.preventDefault(); // keep this — stops the page from reloading
-    // Implement in Step 3.
+    event.preventDefault();
+
+    try {
+      if (!input) {
+        return;
+      }
+
+      const url = normalizeUrl(input.value);
+      const bookmark = { url, slug: uniqueSlug() };
+      bookmarks = [...bookmarks, bookmark];
+
+      if (!persistBookmarks()) {
+        bookmarks = bookmarks.slice(0, -1);
+        setStatus('Mona could not access browser storage. Your link was not saved.', true);
+        return;
+      }
+
+      input.value = '';
+      setStatus(`Saved ${formatBookmark(bookmark)}`);
+      render();
+      input.focus();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'That link could not be saved.', true);
+    }
   });
+
+  clearButton?.addEventListener('click', () => {
+    if (!window.confirm('Clear every saved bookmark?')) {
+      return;
+    }
+
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      bookmarks = [];
+      setStatus('All bookmarks cleared.');
+      render();
+    } catch {
+      setStatus('Mona could not clear browser storage.', true);
+    }
+  });
+
+  function loadBookmarks(): Bookmark[] {
+    try {
+      return parseBookmarks(localStorage.getItem(STORAGE_KEY));
+    } catch {
+      return [];
+    }
+  }
+
+  function persistBookmarks(): boolean {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(bookmarks));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function uniqueSlug(): string {
+    let slug = createSlug();
+
+    while (bookmarks.some((bookmark) => bookmark.slug === slug)) {
+      slug = createSlug();
+    }
+
+    return slug;
+  }
+
+  function setStatus(message: string, isError = false): void {
+    if (!status) {
+      return;
+    }
+
+    status.textContent = message;
+    status.classList.toggle('error', isError);
+  }
+
+  function render(): void {
+    if (!list || !emptyState || !listHeader) {
+      return;
+    }
+
+    list.replaceChildren(...bookmarks.map(renderBookmark));
+    const hasBookmarks = bookmarks.length > 0;
+    emptyState.hidden = hasBookmarks;
+    listHeader.hidden = !hasBookmarks;
+  }
+
+  function renderBookmark(bookmark: Bookmark): HTMLLIElement {
+    const item = document.createElement('li');
+    const link = document.createElement('a');
+    const separator = document.createElement('span');
+    const slug = document.createElement('span');
+    const copyButton = document.createElement('button');
+
+    item.className = 'bookmark';
+    item.setAttribute('aria-label', formatBookmark(bookmark));
+
+    link.className = 'url';
+    link.href = bookmark.url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = bookmark.url;
+
+    separator.className = 'separator';
+    separator.textContent = ' :: ';
+
+    slug.className = 'slug';
+    slug.textContent = bookmark.slug;
+
+    copyButton.className = 'copy';
+    copyButton.type = 'button';
+    copyButton.textContent = 'Copy';
+    copyButton.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(bookmark.slug);
+        setStatus(`Copied ${bookmark.slug}`);
+      } catch {
+        setStatus('Mona could not copy the slug.', true);
+      }
+    });
+
+    item.append(link, separator, slug, copyButton);
+    return item;
+  }
 </script>
+
+<style>
+  .bookmark-card {
+    padding: clamp(1.25rem, 4vw, 2rem);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) * 1.6);
+    background:
+      linear-gradient(135deg, color-mix(in srgb, var(--accent) 8%, transparent), transparent 42%),
+      color-mix(in srgb, Canvas 95%, var(--accent));
+    box-shadow: 0 1.25rem 3.5rem #0002;
+  }
+
+  .intro {
+    margin-bottom: 1.5rem;
+  }
+
+  .intro h2 {
+    margin: 0;
+    max-width: 24ch;
+    font-family: var(--font-head);
+    font-size: clamp(1.2rem, 4vw, 1.65rem);
+    line-height: 1.25;
+  }
+
+  .eyebrow {
+    margin: 0 0 0.35rem;
+    color: var(--accent);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .status {
+    min-height: 1.5em;
+    margin: 0 0 1rem;
+    color: var(--muted);
+    font-size: 0.8rem;
+  }
+
+  .status.error {
+    color: #dc2626;
+  }
+
+  .bookmark .url {
+    min-width: 0;
+    color: inherit;
+    text-decoration-color: color-mix(in srgb, var(--accent) 55%, transparent);
+    text-underline-offset: 0.18em;
+  }
+
+  .separator {
+    color: var(--muted);
+    white-space: pre;
+  }
+
+  .bookmark .slug {
+    font-family: var(--font-body);
+  }
+
+  @media (max-width: 32rem) {
+    .bookmark .copy {
+      margin-left: auto;
+    }
+  }
+</style>
